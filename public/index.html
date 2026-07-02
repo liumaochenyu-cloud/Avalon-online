@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>联机无上帝阿瓦隆</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <svg class="sprite" aria-hidden="true">
+      <symbol id="users" viewBox="0 0 24 24">
+        <path d="M16 11a4 4 0 1 0-3.2-6.4A5 5 0 0 1 16 11Z"></path>
+        <path d="M8 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"></path>
+        <path d="M2 21a6 6 0 0 1 12 0"></path>
+        <path d="M14 17.3A5.5 5.5 0 0 1 22 22"></path>
+      </symbol>
+      <symbol id="copy" viewBox="0 0 24 24">
+        <path d="M8 8h11v11H8z"></path>
+        <path d="M5 16H4V4h12v1"></path>
+      </symbol>
+      <symbol id="plus" viewBox="0 0 24 24">
+        <path d="M12 5v14"></path>
+        <path d="M5 12h14"></path>
+      </symbol>
+      <symbol id="minus" viewBox="0 0 24 24">
+        <path d="M5 12h14"></path>
+      </symbol>
+      <symbol id="shuffle" viewBox="0 0 24 24">
+        <path d="M4 7h3c2 0 3 1 4.5 3.5S14 14 17 14h3"></path>
+        <path d="M4 17h3c2.5 0 3.8-1.8 5-3.8"></path>
+        <path d="M17 4l3 3-3 3"></path>
+        <path d="M17 11l3 3-3 3"></path>
+      </symbol>
+      <symbol id="flag" viewBox="0 0 24 24">
+        <path d="M6 21V4"></path>
+        <path d="M6 5h12l-2 4 2 4H6"></path>
+      </symbol>
+      <symbol id="check" viewBox="0 0 24 24">
+        <path d="m5 12 4 4L19 6"></path>
+      </symbol>
+      <symbol id="x" viewBox="0 0 24 24">
+        <path d="M18 6 6 18"></path>
+        <path d="m6 6 12 12"></path>
+      </symbol>
+    </svg>
+
+    <main class="app-shell">
+      <section class="home" id="homeView">
+        <div class="home-copy">
+          <p class="eyebrow">Online Avalon</p>
+          <h1>联机无上帝阿瓦隆</h1>
+          <p>房主创建房间，把链接或房间号发到微信群。每个人用自己的设备加入，看自己的身份、投组队票、提交任务牌。</p>
+        </div>
+        <div class="home-grid">
+          <form class="panel join-card" id="createForm">
+            <p class="eyebrow">创建房间</p>
+            <h2>我是房主</h2>
+            <label>
+              <span>你的名字</span>
+              <input id="createName" maxlength="20" placeholder="例如：林" autocomplete="nickname" />
+            </label>
+            <div class="avatar-field">
+              <span>头像</span>
+              <div class="avatar-picker" data-avatar-picker="createAvatar">
+                <button type="button" data-avatar="🧙">🧙</button>
+                <button type="button" data-avatar="🛡️">🛡️</button>
+                <button type="button" data-avatar="🍄">🍄</button>
+                <button type="button" data-avatar="🚀">🚀</button>
+              </div>
+              <input id="createAvatar" maxlength="240" placeholder="自定义 emoji 或图片 URL" autocomplete="off" />
+            </div>
+            <button class="primary" type="submit">
+              <svg><use href="#plus"></use></svg>
+              创建房间
+            </button>
+          </form>
+
+          <form class="panel join-card" id="joinForm">
+            <p class="eyebrow">加入房间</p>
+            <h2>我有房间号</h2>
+            <label>
+              <span>房间号</span>
+              <input id="joinCode" maxlength="8" placeholder="ABCDE" autocomplete="off" />
+            </label>
+            <label>
+              <span>你的名字</span>
+              <input id="joinName" maxlength="20" placeholder="例如：玩家 2" autocomplete="nickname" />
+            </label>
+            <div class="avatar-field">
+              <span>头像</span>
+              <div class="avatar-picker" data-avatar-picker="joinAvatar">
+                <button type="button" data-avatar="🦊">🦊</button>
+                <button type="button" data-avatar="🐲">🐲</button>
+                <button type="button" data-avatar="🎲">🎲</button>
+                <button type="button" data-avatar="🥨">🥨</button>
+              </div>
+              <input id="joinAvatar" maxlength="240" placeholder="自定义 emoji 或图片 URL" autocomplete="off" />
+            </div>
+            <button class="secondary" type="submit">
+              <svg><use href="#users"></use></svg>
+              加入对局
+            </button>
+          </form>
+        </div>
+        <p class="tiny-link">
+          <a href="../avalon-template/index.html">打开单设备线下模板</a>
+        </p>
+      </section>
+
+      <section class="room is-hidden" id="roomView">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Room</p>
+            <h1 id="roomTitle">房间</h1>
+          </div>
+          <div class="room-actions">
+            <button class="secondary" id="copyInvite">
+              <svg><use href="#copy"></use></svg>
+              复制邀请
+            </button>
+            <button class="ghost" id="leaveRoom">离开</button>
+          </div>
+        </header>
+
+        <section class="panel status-panel">
+          <div>
+            <p class="eyebrow">当前阶段</p>
+            <h2 id="stageTitle">等待连接</h2>
+          </div>
+          <p id="stageTip"></p>
+          <div class="score-line">
+            <span>玩家 <strong id="playerCount">0</strong></span>
+            <span>身份 <strong id="roleCount">0</strong></span>
+            <span>任务 <strong id="roundCount">0</strong>/5</span>
+          </div>
+        </section>
+
+        <section class="grid main-grid">
+          <aside class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Players</p>
+                <h2>玩家列表</h2>
+              </div>
+              <span class="pill" id="leaderPill">队长</span>
+            </div>
+            <div class="players-list" id="playersList"></div>
+          </aside>
+
+          <section class="panel private-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Private</p>
+                <h2>你的身份</h2>
+              </div>
+              <span class="pill" id="selfPill">未发牌</span>
+            </div>
+            <div id="identityBox" class="identity-empty"></div>
+          </section>
+
+          <section class="panel" id="setupPanel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Setup</p>
+                <h2>身份配置</h2>
+              </div>
+              <div class="preset-row">
+                <button class="chip" data-preset="minimal7">7人极简</button>
+                <button class="chip" data-preset="standard7">7人标准</button>
+                <button class="chip" data-preset="starter5">5人新手</button>
+              </div>
+            </div>
+            <div class="warning" id="setupWarning"></div>
+            <div class="roles-list" id="rolesList"></div>
+            <button class="primary full" id="dealButton">
+              <svg><use href="#shuffle"></use></svg>
+              随机发牌并开始
+            </button>
+          </section>
+
+          <section class="panel play-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Round</p>
+                <h2>组队与任务</h2>
+              </div>
+              <span class="pill" id="teamSizePill">需 0 人</span>
+            </div>
+            <div class="mission-track" id="missionTrack"></div>
+            <div id="playBox" class="play-box"></div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast" id="toast"></div>
+    <script src="/env.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
