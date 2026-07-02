@@ -210,6 +210,13 @@ async function connect() {
     snapshot = next;
     renderRoom();
   });
+  events.addEventListener("removed", (event) => {
+    const data = JSON.parse(event.data || "{}");
+    clearSession();
+    history.replaceState(null, "", "/");
+    renderHome();
+    showToast(data.reason || "你已离开房间");
+  });
   events.onerror = () => {
     showToast("连接断开，正在尝试重连");
   };
@@ -241,6 +248,8 @@ function renderRoom() {
   els.roundCount.textContent = snapshot.roundIndex;
   els.teamSizePill.textContent = snapshot.stage === "finished" ? "已结束" : snapshot.stage === "assassination" ? "刺杀" : `需 ${snapshot.currentTeamSize} 人`;
   els.leaderPill.textContent = `队长：${playerName(snapshot.leaderId) || "未定"}`;
+  els.leaveRoom.disabled = !snapshot.canManageRoster;
+  els.leaveRoom.title = snapshot.canManageRoster ? "离开房间" : "游戏进行中不能退出";
 
   renderPlayers();
   renderIdentity();
@@ -260,6 +269,7 @@ function isMinimalMode() {
 }
 
 function renderPlayers() {
+  const canKick = snapshot.self.isHost && snapshot.canManageRoster;
   els.playersList.innerHTML = snapshot.players
     .map(
       (player, index) => `
@@ -278,7 +288,9 @@ function renderPlayers() {
           ${
             player.id === snapshot.self.id
               ? `<span class="self-badge">你本人</span>`
-              : `<span class="online-dot ${player.connected ? "is-online" : ""}" title="${player.connected ? "在线" : "离线"}"></span>`
+              : canKick
+                ? `<button class="kick-button" data-kick="${player.id}" title="移出玩家">移出</button>`
+                : `<span class="online-dot ${player.connected ? "is-online" : ""}" title="${player.connected ? "在线" : "离线"}"></span>`
           }
         </div>
       `
@@ -573,8 +585,8 @@ function renderMissionHistory() {
                   .map((choice) => {
                     const player = snapshot.players.find((entry) => entry.id === choice.playerId);
                     return `<div class="choice-row ${choice.card}">
-                      ${avatarHtml(player?.avatar, "mini-avatar")}
-                      <span>${escapeHtml(player?.name || "")}</span>
+                      ${avatarHtml(player?.avatar || choice.avatar, "mini-avatar")}
+                      <span>${escapeHtml(player?.name || choice.name || "离场玩家")}</span>
                       <strong>${choice.symbol}</strong>
                     </div>`;
                   })
@@ -622,10 +634,14 @@ function renderFinished() {
   const last = snapshot.lastMission
     ? `<p>最后一次任务：第 ${snapshot.lastMission.roundIndex + 1} 轮：<strong>${missionCards(snapshot.lastMission)}</strong>，${snapshot.lastMission.result === "success" ? "任务成功" : "任务失败"}。</p>`
     : "";
+  const assassinationTarget = snapshot.assassination?.targetId
+    ? playerChips([snapshot.assassination.targetId]) ||
+      `<span class="player-chip">${avatarHtml(snapshot.assassination.targetAvatar, "chip-avatar")}${escapeHtml(snapshot.assassination.targetName || "离场玩家")}</span>`
+    : "";
   const assassination = snapshot.assassination?.targetId
     ? `<div class="assassination-result ${snapshot.assassination.hit ? "hit" : "miss"}">
         <strong>${snapshot.assassination.hit ? "刺杀命中梅林" : "刺杀未命中"}</strong>
-        <span>刺杀目标：${playerChips([snapshot.assassination.targetId])}</span>
+        <span>刺杀目标：${assassinationTarget}</span>
       </div>`
     : "";
   els.playBox.innerHTML = `
@@ -691,7 +707,18 @@ async function sendRoomAction(action, body = {}) {
 els.createForm.addEventListener("submit", createRoom);
 els.joinForm.addEventListener("submit", joinRoom);
 els.copyInvite.addEventListener("click", copyInvite);
-els.leaveRoom.addEventListener("click", () => {
+els.leaveRoom.addEventListener("click", async () => {
+  if (!session) return;
+  if (snapshot && !snapshot.canManageRoster) {
+    showToast("游戏进行中不能退出");
+    return;
+  }
+  try {
+    await sendRoomAction("leave");
+  } catch (error) {
+    showToast(error.message);
+    return;
+  }
   clearSession();
   history.replaceState(null, "", "/");
   renderHome();
@@ -711,6 +738,7 @@ document.addEventListener("click", async (event) => {
   const voteButton = event.target.closest("[data-vote]");
   const cardButton = event.target.closest("[data-card]");
   const assassinateButton = event.target.closest("[data-assassinate]");
+  const kickButton = event.target.closest("[data-kick]");
   const proposalButton = event.target.closest("#submitProposal");
   const resetButton = event.target.closest("#resetRoom");
 
@@ -738,6 +766,9 @@ document.addEventListener("click", async (event) => {
     }
     if (assassinateButton) {
       await sendRoomAction("assassinate", { targetId: assassinateButton.dataset.assassinate });
+    }
+    if (kickButton) {
+      await sendRoomAction("kick", { targetId: kickButton.dataset.kick });
     }
     if (proposalButton) {
       await sendRoomAction("propose", { teamIds: [...selectedTeam] });
