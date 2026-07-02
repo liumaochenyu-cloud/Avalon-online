@@ -250,6 +250,18 @@ function requireHost(room, player) {
   }
 }
 
+function canManageRoster(room) {
+  return room.stage === "lobby" || room.stage === "finished";
+}
+
+function requireRosterUnlocked(room, message = "游戏进行中不能变更玩家") {
+  if (!canManageRoster(room)) {
+    const error = new Error(message);
+    error.status = 409;
+    throw error;
+  }
+}
+
 function roleTotal(room) {
   return Object.values(room.roleCounts).reduce((sum, count) => sum + count, 0);
 }
@@ -296,6 +308,49 @@ function publicPlayer(room, player) {
     isLeader: room.players[room.leaderIndex]?.id === player.id,
     connected: [...room.clients].some((client) => client.playerId === player.id),
   };
+}
+
+function removePlayerFromRoom(room, playerId, reason = "你已离开房间") {
+  const player = room.players.find((item) => item.id === playerId);
+  if (!player) return false;
+
+  for (const client of [...room.clients]) {
+    if (client.playerId === playerId) {
+      sendEvent(client, "removed", { reason });
+      client.res.end();
+      room.clients.delete(client);
+    }
+  }
+
+  room.players = room.players.filter((item) => item.id !== playerId);
+  room.assignments.delete(playerId);
+  room.teamVotes.delete(playerId);
+  room.missionCards.delete(playerId);
+  if (room.proposal) {
+    room.proposal.teamIds = room.proposal.teamIds.filter((id) => id !== playerId);
+  }
+  if (room.assassination?.assassinId === playerId || room.assassination?.merlinId === playerId) {
+    room.assassination = null;
+  }
+  if (room.hostId === playerId && room.players.length) {
+    room.hostId = room.players[0].id;
+  }
+  room.leaderIndex = room.players.length ? Math.min(room.leaderIndex, room.players.length - 1) : 0;
+
+  if (!room.players.length) {
+    rooms.delete(room.code);
+  }
+  return true;
+}
+
+function dissolveRoom(room, reason = "房间已被房主解散") {
+  for (const client of [...room.clients]) {
+    sendEvent(client, "removed", { reason });
+    client.res.end();
+    room.clients.delete(client);
+  }
+  room.players = [];
+  rooms.delete(room.code);
 }
 
 function assignmentEntries(room) {
@@ -420,6 +475,7 @@ function buildSnapshot(room, playerId) {
     hostId: room.hostId,
     leaderId: leader?.id || null,
     players: room.players.map((item) => publicPlayer(room, item)),
+    canManageRoster: canManageRoster(room),
     roles: roleOptions(room),
     roleTotal: roleTotal(room),
     playerTotal: room.players.length,
@@ -451,6 +507,8 @@ function buildSnapshot(room, playerId) {
       ? {
           submitted: Boolean(room.assassination.targetId),
           targetId: isFinished ? room.assassination.targetId : null,
+          targetName: isFinished ? room.assassination.targetName : null,
+          targetAvatar: isFinished ? room.assassination.targetAvatar : null,
           hit: isFinished ? room.assassination.hit : null,
         }
       : null,
@@ -561,8 +619,11 @@ function finalizeMission(room) {
   const cards = [...room.missionCards.values()];
   const choices = room.proposal.teamIds.map((playerId) => {
     const card = room.missionCards.get(playerId);
+    const player = room.players.find((item) => item.id === playerId);
     return {
       playerId,
+      name: player?.name || "离场玩家",
+      avatar: player?.avatar || "🎲",
       card,
       symbol: card === "success" ? "✅" : "❌",
     };
@@ -668,6 +729,35 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === "POST" && action === "leave") {
+    requireRosterUnlocked(room, "游戏进行中不能退出");
+    removePlayerFromRoom(room, player.id, "你已离开房间");
+    json(res, 200, { ok: true });
+    if (rooms.has(room.code)) broadcast(room);
+    return;
+  }
+
+  if (req.method === "POST" && action === "kick") {
+    requireHost(room, player);
+    requireRosterUnlocked(room, "游戏进行中不能踢人");
+    const targetId = String(body.targetId || "");
+    if (!targetId) return fail(res, 400, "缺少目标玩家");
+    if (targetId === player.id) return fail(res, 400, "房主不能踢自己，请使用离开房间");
+    if (!room.players.some((item) => item.id === targetId)) return fail(res, 404, "目标玩家不存在");
+    removePlayerFromRoom(room, targetId, "你已被房主移出房间");
+    json(res, 200, { ok: true });
+    if (rooms.has(room.code)) broadcast(room);
+    return;
+  }
+
+  if (req.method === "POST" && action === "dissolve") {
+    requireHost(room, player);
+    requireRosterUnlocked(room, "游戏进行中不能解散房间");
+    json(res, 200, { ok: true });
+    dissolveRoom(room);
+    return;
+  }
+
   if (req.method === "POST" && action === "propose") {
     if (room.stage !== "proposal") return fail(res, 409, "当前不能提名队伍");
     const leader = room.players[room.leaderIndex];
@@ -721,9 +811,12 @@ async function handleApi(req, res, url) {
     if (player.id !== room.assassination.assassinId) return fail(res, 403, "只有刺客可以选择刺杀目标");
     if (room.assassination.targetId) return fail(res, 409, "刺杀已经完成");
     const targetId = String(body.targetId || "");
-    if (!room.players.some((item) => item.id === targetId)) return fail(res, 400, "目标玩家不存在");
+    const target = room.players.find((item) => item.id === targetId);
+    if (!target) return fail(res, 400, "目标玩家不存在");
     if (targetId === player.id) return fail(res, 400, "刺客不能选择自己");
     room.assassination.targetId = targetId;
+    room.assassination.targetName = target.name;
+    room.assassination.targetAvatar = target.avatar;
     room.assassination.hit = targetId === room.assassination.merlinId;
     room.stage = "finished";
     json(res, 200, { ok: true });
@@ -781,7 +874,7 @@ function handleEvents(req, res, url, code) {
   req.on("close", () => {
     clearInterval(heartbeat);
     room.clients.delete(client);
-    broadcast(room);
+    if (rooms.has(room.code)) broadcast(room);
   });
 }
 

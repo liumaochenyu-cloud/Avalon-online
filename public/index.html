@@ -45,6 +45,9 @@
     </svg>
 
     <main class="app-shell">
+      <div class="file-warning is-hidden" id="fileWarning">
+        联机版不能直接打开 HTML 文件，请从 http://127.0.0.1:4177 或公网链接进入。
+      </div>
       <section class="home" id="homeView">
         <div class="home-copy">
           <p class="eyebrow">Online Avalon</p>
@@ -118,6 +121,7 @@
               <svg><use href="#copy"></use></svg>
               复制邀请
             </button>
+            <button class="danger" id="dissolveRoom" hidden>解散房间</button>
             <button class="ghost" id="leaveRoom">离开</button>
           </div>
         </header>

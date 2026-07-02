@@ -2,6 +2,7 @@ const SESSION_KEY = "avalon-online-session-v1";
 const runtimeEnv = window.__AVALON_ENV__ || {};
 const API_ORIGIN = normalizeOrigin(runtimeEnv.VITE_API_URL || "");
 const SOCKET_ORIGIN = normalizeOrigin(runtimeEnv.VITE_SOCKET_URL || runtimeEnv.VITE_API_URL || "");
+const IS_FILE_MODE = location.protocol === "file:";
 
 function normalizeOrigin(value) {
   return String(value || "").replace(/\/$/, "");
@@ -22,6 +23,7 @@ function isLocalHost(hostname) {
 const els = {
   homeView: document.querySelector("#homeView"),
   roomView: document.querySelector("#roomView"),
+  fileWarning: document.querySelector("#fileWarning"),
   createForm: document.querySelector("#createForm"),
   joinForm: document.querySelector("#joinForm"),
   createName: document.querySelector("#createName"),
@@ -31,6 +33,7 @@ const els = {
   joinAvatar: document.querySelector("#joinAvatar"),
   roomTitle: document.querySelector("#roomTitle"),
   copyInvite: document.querySelector("#copyInvite"),
+  dissolveRoom: document.querySelector("#dissolveRoom"),
   leaveRoom: document.querySelector("#leaveRoom"),
   stageTitle: document.querySelector("#stageTitle"),
   stageTip: document.querySelector("#stageTip"),
@@ -154,6 +157,9 @@ function showToast(message) {
 }
 
 async function post(path, body) {
+  if (IS_FILE_MODE) {
+    throw new Error("请从 http://127.0.0.1:4177 打开联机版");
+  }
   const response = await fetch(apiUrl(path), {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -172,6 +178,11 @@ function authed(extra = {}) {
     secret: session.secret,
     ...extra,
   };
+}
+
+function isRosterUnlocked() {
+  if (!snapshot) return false;
+  return snapshot.canManageRoster ?? ["lobby", "finished"].includes(snapshot.stage);
 }
 
 async function connect() {
@@ -239,6 +250,7 @@ function renderRoom() {
   els.homeView.classList.add("is-hidden");
   els.roomView.classList.remove("is-hidden");
   els.roomTitle.textContent = `房间 ${snapshot.code}`;
+  const rosterUnlocked = isRosterUnlocked();
 
   const stage = stageText[snapshot.stage] || stageText.lobby;
   els.stageTitle.textContent = stage.title;
@@ -248,8 +260,11 @@ function renderRoom() {
   els.roundCount.textContent = snapshot.roundIndex;
   els.teamSizePill.textContent = snapshot.stage === "finished" ? "已结束" : snapshot.stage === "assassination" ? "刺杀" : `需 ${snapshot.currentTeamSize} 人`;
   els.leaderPill.textContent = `队长：${playerName(snapshot.leaderId) || "未定"}`;
-  els.leaveRoom.disabled = !snapshot.canManageRoster;
-  els.leaveRoom.title = snapshot.canManageRoster ? "离开房间" : "游戏进行中不能退出";
+  els.leaveRoom.disabled = !rosterUnlocked;
+  els.leaveRoom.title = rosterUnlocked ? "离开房间" : "游戏进行中不能退出";
+  els.dissolveRoom.hidden = !snapshot.self.isHost;
+  els.dissolveRoom.disabled = !snapshot.self.isHost || !rosterUnlocked;
+  els.dissolveRoom.title = rosterUnlocked ? "房主解散房间" : "游戏进行中不能解散房间";
 
   renderPlayers();
   renderIdentity();
@@ -269,7 +284,7 @@ function isMinimalMode() {
 }
 
 function renderPlayers() {
-  const canKick = snapshot.self.isHost && snapshot.canManageRoster;
+  const canKick = snapshot.self.isHost && isRosterUnlocked();
   els.playersList.innerHTML = snapshot.players
     .map(
       (player, index) => `
@@ -578,7 +593,7 @@ function renderMissionHistory() {
     <div class="history-list">
       ${snapshot.missionResults
         .map((mission) => {
-          const isSpecial = snapshot.playerTotal >= 7 && mission.roundIndex === 3;
+          const isSpecial = mission.threshold > 1;
           const choiceRows = mission.choices?.length
             ? `<div class="choice-list">
                 ${mission.choices
@@ -707,9 +722,26 @@ async function sendRoomAction(action, body = {}) {
 els.createForm.addEventListener("submit", createRoom);
 els.joinForm.addEventListener("submit", joinRoom);
 els.copyInvite.addEventListener("click", copyInvite);
+els.dissolveRoom.addEventListener("click", async () => {
+  if (!session || !snapshot?.self.isHost) return;
+  if (!isRosterUnlocked()) {
+    showToast("游戏进行中不能解散房间");
+    return;
+  }
+  if (!confirm("确定解散这个房间吗？所有玩家都会回到首页。")) return;
+  try {
+    await sendRoomAction("dissolve");
+  } catch (error) {
+    showToast(error.message);
+    return;
+  }
+  clearSession();
+  history.replaceState(null, "", "/");
+  renderHome();
+});
 els.leaveRoom.addEventListener("click", async () => {
   if (!session) return;
-  if (snapshot && !snapshot.canManageRoster) {
+  if (snapshot && !isRosterUnlocked()) {
     showToast("游戏进行中不能退出");
     return;
   }
@@ -811,6 +843,11 @@ if (urlRoom) {
   if (session?.roomCode && session.roomCode !== normalizedRoom) {
     clearSession();
   }
+}
+
+if (IS_FILE_MODE) {
+  els.fileWarning?.classList.remove("is-hidden");
+  showToast("请从 http://127.0.0.1:4177 打开联机版");
 }
 
 if (session) {
