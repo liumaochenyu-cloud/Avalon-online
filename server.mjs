@@ -214,6 +214,7 @@ function createRoom(hostName, avatar) {
     lastVote: null,
     lastMission: null,
     assassination: null,
+    forceEnded: null,
     clients: new Set(),
   };
   rooms.set(code, room);
@@ -420,6 +421,7 @@ function findAssignmentByRole(room, roleId) {
 }
 
 function getWinner(room) {
+  if (room.forceEnded) return "canceled";
   const successTotal = room.missionResults.filter((item) => item.result === "success").length;
   const failTotal = room.missionResults.filter((item) => item.result === "fail").length;
   if (failTotal >= 3) return "evil";
@@ -503,6 +505,7 @@ function buildSnapshot(room, playerId) {
     lastVote: room.lastVote,
     lastMission: publicLastMission,
     revealedRoles,
+    forceEnded: isFinished ? room.forceEnded : null,
     assassination: room.assassination
       ? {
           submitted: Boolean(room.assassination.targetId),
@@ -587,6 +590,7 @@ function deal(room) {
   room.lastVote = null;
   room.lastMission = null;
   room.assassination = null;
+  room.forceEnded = null;
   clearRoundInputs(room);
 }
 
@@ -731,6 +735,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && action === "leave") {
     requireRosterUnlocked(room, "游戏进行中不能退出");
+    if (room.hostId === player.id) return fail(res, 409, "房主不能直接退出，请先转让房主或解散房间");
     removePlayerFromRoom(room, player.id, "你已离开房间");
     json(res, 200, { ok: true });
     if (rooms.has(room.code)) broadcast(room);
@@ -750,11 +755,41 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === "POST" && action === "transfer-host") {
+    requireHost(room, player);
+    requireRosterUnlocked(room, "游戏进行中不能转让房主");
+    const targetId = String(body.targetId || "");
+    if (!targetId) return fail(res, 400, "缺少目标玩家");
+    if (targetId === player.id) return fail(res, 400, "不能把房主转让给自己");
+    const target = room.players.find((item) => item.id === targetId);
+    if (!target) return fail(res, 404, "目标玩家不存在");
+    room.hostId = target.id;
+    json(res, 200, { ok: true });
+    broadcast(room);
+    return;
+  }
+
   if (req.method === "POST" && action === "dissolve") {
     requireHost(room, player);
     requireRosterUnlocked(room, "游戏进行中不能解散房间");
     json(res, 200, { ok: true });
     dissolveRoom(room);
+    return;
+  }
+
+  if (req.method === "POST" && action === "force-end") {
+    requireHost(room, player);
+    if (room.stage === "lobby") return fail(res, 409, "对局还没开始，不需要强制结束");
+    if (room.stage === "finished") return fail(res, 409, "对局已经结束");
+    room.forceEnded = {
+      byPlayerId: player.id,
+      byName: player.name,
+      at: Date.now(),
+    };
+    room.stage = "finished";
+    clearRoundInputs(room);
+    json(res, 200, { ok: true });
+    broadcast(room);
     return;
   }
 
@@ -833,6 +868,7 @@ async function handleApi(req, res, url) {
     room.lastVote = null;
     room.lastMission = null;
     room.assassination = null;
+    room.forceEnded = null;
     clearRoundInputs(room);
     json(res, 200, { ok: true });
     broadcast(room);

@@ -34,6 +34,7 @@ const els = {
   roomTitle: document.querySelector("#roomTitle"),
   copyInvite: document.querySelector("#copyInvite"),
   forceEndRoom: document.querySelector("#forceEndRoom"),
+  transferHost: document.querySelector("#transferHost"),
   dissolveRoom: document.querySelector("#dissolveRoom"),
   leaveRoom: document.querySelector("#leaveRoom"),
   stageTitle: document.querySelector("#stageTitle"),
@@ -190,6 +191,14 @@ function canForceEndGame() {
   return Boolean(snapshot?.self?.isHost && !["lobby", "finished"].includes(snapshot.stage));
 }
 
+function canTransferHost() {
+  return Boolean(snapshot?.self?.isHost && isRosterUnlocked() && snapshot.players.length > 1);
+}
+
+function on(element, eventName, handler) {
+  if (element) element.addEventListener(eventName, handler);
+}
+
 async function connect() {
   if (!session?.roomCode || !session?.playerId || !session?.secret) {
     renderHome();
@@ -265,14 +274,19 @@ function renderRoom() {
   els.roundCount.textContent = snapshot.roundIndex;
   els.teamSizePill.textContent = snapshot.stage === "finished" ? "已结束" : snapshot.stage === "assassination" ? "刺杀" : `需 ${snapshot.currentTeamSize} 人`;
   els.leaderPill.textContent = `队长：${playerName(snapshot.leaderId) || "未定"}`;
-  els.leaveRoom.disabled = !rosterUnlocked;
-  els.leaveRoom.title = rosterUnlocked ? "离开房间" : "游戏进行中不能退出";
-  els.forceEndRoom.hidden = !canForceEndGame();
-  els.forceEndRoom.disabled = !canForceEndGame();
-  els.forceEndRoom.title = "房主保险操作：强制进入复盘";
-  els.dissolveRoom.hidden = !snapshot.self.isHost;
-  els.dissolveRoom.disabled = !snapshot.self.isHost || !rosterUnlocked;
-  els.dissolveRoom.title = rosterUnlocked ? "房主解散房间" : "游戏进行中不能解散房间";
+  const hostLocked = snapshot.self.isHost;
+  els.leaveRoom.disabled = hostLocked || !rosterUnlocked;
+  els.leaveRoom.title = hostLocked ? "房主不能直接退出，请先转让房主或解散房间" : rosterUnlocked ? "离开房间" : "游戏进行中不能退出";
+  if (els.forceEndRoom) {
+    els.forceEndRoom.hidden = !canForceEndGame();
+    els.forceEndRoom.disabled = !canForceEndGame();
+    els.forceEndRoom.title = "房主保险操作：强制进入复盘";
+  }
+  if (els.dissolveRoom) {
+    els.dissolveRoom.hidden = !snapshot.self.isHost;
+    els.dissolveRoom.disabled = !snapshot.self.isHost || !rosterUnlocked;
+    els.dissolveRoom.title = rosterUnlocked ? "房主解散房间" : "游戏进行中不能解散房间";
+  }
 
   renderPlayers();
   renderIdentity();
@@ -293,6 +307,7 @@ function isMinimalMode() {
 
 function renderPlayers() {
   const canKick = snapshot.self.isHost && isRosterUnlocked();
+  const canTransfer = canTransferHost();
   els.playersList.innerHTML = snapshot.players
     .map(
       (player, index) => `
@@ -311,8 +326,11 @@ function renderPlayers() {
           ${
             player.id === snapshot.self.id
               ? `<span class="self-badge">你本人</span>`
-              : canKick
-                ? `<button class="kick-button" data-kick="${player.id}" title="移出玩家">移出</button>`
+              : canKick || canTransfer
+                ? `<div class="player-actions">
+                    ${canTransfer ? `<button class="transfer-button" data-transfer-host="${player.id}" title="转让房主">转让</button>` : ""}
+                    ${canKick ? `<button class="kick-button" data-kick="${player.id}" title="移出玩家">移出</button>` : ""}
+                  </div>`
                 : `<span class="online-dot ${player.connected ? "is-online" : ""}" title="${player.connected ? "在线" : "离线"}"></span>`
           }
         </div>
@@ -731,10 +749,10 @@ async function sendRoomAction(action, body = {}) {
   return post(`/api/rooms/${encodeURIComponent(session.roomCode)}/${action}`, authed(body));
 }
 
-els.createForm.addEventListener("submit", createRoom);
-els.joinForm.addEventListener("submit", joinRoom);
-els.copyInvite.addEventListener("click", copyInvite);
-els.forceEndRoom.addEventListener("click", async () => {
+on(els.createForm, "submit", createRoom);
+on(els.joinForm, "submit", joinRoom);
+on(els.copyInvite, "click", copyInvite);
+on(els.forceEndRoom, "click", async () => {
   if (!session || !canForceEndGame()) return;
   if (!confirm("确定强制结束本局吗？会立刻公开所有身份和已完成任务记录。")) return;
   try {
@@ -743,7 +761,7 @@ els.forceEndRoom.addEventListener("click", async () => {
     showToast(error.message);
   }
 });
-els.dissolveRoom.addEventListener("click", async () => {
+on(els.dissolveRoom, "click", async () => {
   if (!session || !snapshot?.self.isHost) return;
   if (!isRosterUnlocked()) {
     showToast("游戏进行中不能解散房间");
@@ -760,8 +778,12 @@ els.dissolveRoom.addEventListener("click", async () => {
   history.replaceState(null, "", "/");
   renderHome();
 });
-els.leaveRoom.addEventListener("click", async () => {
+on(els.leaveRoom, "click", async () => {
   if (!session) return;
+  if (snapshot?.self.isHost) {
+    showToast("房主请先转让房主或解散房间");
+    return;
+  }
   if (snapshot && !isRosterUnlocked()) {
     showToast("游戏进行中不能退出");
     return;
@@ -776,7 +798,7 @@ els.leaveRoom.addEventListener("click", async () => {
   history.replaceState(null, "", "/");
   renderHome();
 });
-els.dealButton.addEventListener("click", async () => {
+on(els.dealButton, "click", async () => {
   try {
     await sendRoomAction("deal");
   } catch (error) {
@@ -792,6 +814,7 @@ document.addEventListener("click", async (event) => {
   const cardButton = event.target.closest("[data-card]");
   const assassinateButton = event.target.closest("[data-assassinate]");
   const kickButton = event.target.closest("[data-kick]");
+  const transferHostButton = event.target.closest("[data-transfer-host]");
   const proposalButton = event.target.closest("#submitProposal");
   const resetButton = event.target.closest("#resetRoom");
 
@@ -822,6 +845,13 @@ document.addEventListener("click", async (event) => {
     }
     if (kickButton) {
       await sendRoomAction("kick", { targetId: kickButton.dataset.kick });
+    }
+    if (transferHostButton) {
+      const targetId = transferHostButton.dataset.transferHost;
+      const targetName = playerName(targetId) || "这名玩家";
+      if (confirm(`确定把房主转让给 ${targetName} 吗？转让后你会失去房主权限。`)) {
+        await sendRoomAction("transfer-host", { targetId });
+      }
     }
     if (proposalButton) {
       await sendRoomAction("propose", { teamIds: [...selectedTeam] });

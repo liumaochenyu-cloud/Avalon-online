@@ -421,14 +421,37 @@ input:focus {
   white-space: nowrap;
 }
 
+.player-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.transfer-button,
 .kick-button {
   min-height: 30px;
-  border: 1px solid var(--evil);
   border-radius: 8px;
-  background: var(--evil-soft);
-  color: var(--evil);
   font-weight: 900;
   padding: 0 9px;
+}
+
+.transfer-button {
+  border: 1px solid var(--blue);
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.transfer-button:hover {
+  background: var(--blue);
+  color: white;
+}
+
+.kick-button {
+  border: 1px solid var(--evil);
+  background: var(--evil-soft);
+  color: var(--evil);
 }
 
 .kick-button:hover {
