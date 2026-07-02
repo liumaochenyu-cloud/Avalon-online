@@ -33,6 +33,7 @@ const els = {
   joinAvatar: document.querySelector("#joinAvatar"),
   roomTitle: document.querySelector("#roomTitle"),
   copyInvite: document.querySelector("#copyInvite"),
+  forceEndRoom: document.querySelector("#forceEndRoom"),
   dissolveRoom: document.querySelector("#dissolveRoom"),
   leaveRoom: document.querySelector("#leaveRoom"),
   stageTitle: document.querySelector("#stageTitle"),
@@ -185,6 +186,10 @@ function isRosterUnlocked() {
   return snapshot.canManageRoster ?? ["lobby", "finished"].includes(snapshot.stage);
 }
 
+function canForceEndGame() {
+  return Boolean(snapshot?.self?.isHost && !["lobby", "finished"].includes(snapshot.stage));
+}
+
 async function connect() {
   if (!session?.roomCode || !session?.playerId || !session?.secret) {
     renderHome();
@@ -262,6 +267,9 @@ function renderRoom() {
   els.leaderPill.textContent = `队长：${playerName(snapshot.leaderId) || "未定"}`;
   els.leaveRoom.disabled = !rosterUnlocked;
   els.leaveRoom.title = rosterUnlocked ? "离开房间" : "游戏进行中不能退出";
+  els.forceEndRoom.hidden = !canForceEndGame();
+  els.forceEndRoom.disabled = !canForceEndGame();
+  els.forceEndRoom.title = "房主保险操作：强制进入复盘";
   els.dissolveRoom.hidden = !snapshot.self.isHost;
   els.dissolveRoom.disabled = !snapshot.self.isHost || !rosterUnlocked;
   els.dissolveRoom.title = rosterUnlocked ? "房主解散房间" : "游戏进行中不能解散房间";
@@ -645,9 +653,13 @@ function renderRevealedRoles() {
 }
 
 function renderFinished() {
-  const winner = snapshot.winner === "good" ? "好人阵营" : "坏人阵营";
+  const isForcedEnd = snapshot.winner === "canceled" || snapshot.forceEnded;
+  const winner = isForcedEnd ? "对局已强制结束" : snapshot.winner === "good" ? "好人阵营" : "坏人阵营";
   const last = snapshot.lastMission
     ? `<p>最后一次任务：第 ${snapshot.lastMission.roundIndex + 1} 轮：<strong>${missionCards(snapshot.lastMission)}</strong>，${snapshot.lastMission.result === "success" ? "任务成功" : "任务失败"}。</p>`
+    : "";
+  const forcedEndText = isForcedEnd
+    ? `<p>${escapeHtml(snapshot.forceEnded?.byName || "房主")} 已强制结束本局。这里公开身份和已完成任务记录，但本局不判定阵营胜负。</p>`
     : "";
   const assassinationTarget = snapshot.assassination?.targetId
     ? playerChips([snapshot.assassination.targetId]) ||
@@ -660,10 +672,10 @@ function renderFinished() {
       </div>`
     : "";
   els.playBox.innerHTML = `
-    <h3>${winner}获胜</h3>
+    <h3>${isForcedEnd ? winner : `${winner}获胜`}</h3>
     ${last}
     ${assassination}
-    <p>${snapshot.winner === "good" ? "梅林没有被刺中，好人守住胜利。" : snapshot.assassination?.hit ? "刺客找到了梅林，坏人逆转成功。" : "坏人已经让三次任务失败。"}</p>
+    ${forcedEndText || `<p>${snapshot.winner === "good" ? "梅林没有被刺中，好人守住胜利。" : snapshot.assassination?.hit ? "刺客找到了梅林，坏人逆转成功。" : "坏人已经让三次任务失败。"}</p>`}
     <h3>公开身份</h3>
     ${renderRevealedRoles()}
     <h3>任务记录</h3>
@@ -722,6 +734,15 @@ async function sendRoomAction(action, body = {}) {
 els.createForm.addEventListener("submit", createRoom);
 els.joinForm.addEventListener("submit", joinRoom);
 els.copyInvite.addEventListener("click", copyInvite);
+els.forceEndRoom.addEventListener("click", async () => {
+  if (!session || !canForceEndGame()) return;
+  if (!confirm("确定强制结束本局吗？会立刻公开所有身份和已完成任务记录。")) return;
+  try {
+    await sendRoomAction("force-end");
+  } catch (error) {
+    showToast(error.message);
+  }
+});
 els.dissolveRoom.addEventListener("click", async () => {
   if (!session || !snapshot?.self.isHost) return;
   if (!isRosterUnlocked()) {
