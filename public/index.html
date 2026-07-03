@@ -140,8 +140,15 @@
           </div>
         </section>
 
+        <nav class="mobile-tabs" aria-label="房间视图">
+          <button type="button" class="mobile-tab is-active" data-view-tab="play">对局</button>
+          <button type="button" class="mobile-tab" data-view-tab="players">玩家</button>
+          <button type="button" class="mobile-tab" data-view-tab="identity">身份</button>
+          <button type="button" class="mobile-tab" data-view-tab="setup">设置</button>
+        </nav>
+
         <section class="grid main-grid">
-          <aside class="panel">
+          <aside class="panel players-panel" data-view-panel="players">
             <div class="section-head">
               <div>
                 <p class="eyebrow">Players</p>
@@ -152,7 +159,7 @@
             <div class="players-list" id="playersList"></div>
           </aside>
 
-          <section class="panel private-panel">
+          <section class="panel private-panel" data-view-panel="identity">
             <div class="section-head">
               <div>
                 <p class="eyebrow">Private</p>
@@ -163,7 +170,7 @@
             <div id="identityBox" class="identity-empty"></div>
           </section>
 
-          <section class="panel" id="setupPanel">
+          <section class="panel setup-panel" id="setupPanel" data-view-panel="setup">
             <div class="section-head">
               <div>
                 <p class="eyebrow">Setup</p>
@@ -183,7 +190,7 @@
             </button>
           </section>
 
-          <section class="panel play-panel">
+          <section class="panel play-panel" data-view-panel="play">
             <div class="section-head">
               <div>
                 <p class="eyebrow">Round</p>

@@ -408,6 +408,7 @@ function publicMission(mission, revealChoices = false) {
     successCards: mission.successCards,
     threshold: mission.threshold,
     teamIds: mission.teamIds,
+    team: mission.team || [],
     roundIndex: mission.roundIndex,
   };
   if (revealChoices) {
@@ -645,6 +646,7 @@ function finalizeMission(room) {
     successCards,
     threshold,
     teamIds: room.proposal.teamIds,
+    team: choices.map(({ playerId, name, avatar }) => ({ playerId, name, avatar })),
     roundIndex: room.proposal.roundIndex,
   };
   room.missionResults.push(mission);

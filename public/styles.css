@@ -94,10 +94,27 @@ svg {
 
 .main-grid {
   grid-template-columns: minmax(250px, 0.8fr) minmax(0, 1.08fr);
+  align-items: start;
 }
 
 .play-panel {
-  grid-column: 1 / -1;
+  grid-column: 2;
+  grid-row: 1 / span 3;
+}
+
+.players-panel {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.private-panel {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.setup-panel {
+  grid-column: 1;
+  grid-row: 3;
 }
 
 .topbar {
@@ -120,6 +137,10 @@ svg {
 
 .room-actions {
   justify-content: flex-end;
+}
+
+.mobile-tabs {
+  display: none;
 }
 
 .eyebrow {
@@ -780,6 +801,71 @@ input:focus {
   font-weight: 900;
 }
 
+.public-ledger {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.ledger-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.ledger-head strong {
+  font-size: 0.95rem;
+}
+
+.ledger-head span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.ledger-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ledger-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.55fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  padding: 9px;
+}
+
+.ledger-row.success {
+  border-left: 5px solid var(--good);
+}
+
+.ledger-row.fail {
+  border-left: 5px solid var(--evil);
+}
+
+.ledger-main strong {
+  display: block;
+}
+
+.ledger-main span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.ledger-team {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .vote-buttons {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1005,10 +1091,295 @@ input:focus {
   }
 }
 
+@media (max-width: 760px) {
+  body {
+    background: var(--paper);
+  }
+
+  .app-shell {
+    width: 100%;
+    padding: 0;
+  }
+
+  .home {
+    min-height: auto;
+    align-content: start;
+    padding: 16px 12px 24px;
+    gap: 14px;
+  }
+
+  .home-copy p:last-child {
+    font-size: 0.95rem;
+    line-height: 1.55;
+  }
+
+  .join-card {
+    gap: 11px;
+  }
+
+  .room:not(.is-hidden) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 0;
+    padding: 10px 10px 8px;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .topbar .eyebrow {
+    display: none;
+  }
+
+  .topbar h1 {
+    font-size: 1.08rem;
+    line-height: 1.15;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .room-actions {
+    max-width: 70vw;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .room-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .room-actions #copyInvite {
+    display: none;
+  }
+
+  .room-actions button {
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  .status-panel {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px 10px;
+    align-items: center;
+    margin: 0;
+    padding: 9px 10px;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--paper);
+  }
+
+  .status-panel .eyebrow {
+    display: none;
+  }
+
+  .status-panel h2 {
+    font-size: 1rem;
+  }
+
+  #stageTip {
+    grid-column: 1 / -1;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    max-height: 2.7em;
+    overflow: hidden;
+  }
+
+  .score-line {
+    display: grid;
+    grid-template-columns: repeat(3, 46px);
+    gap: 5px;
+    justify-content: end;
+    font-size: 0.72rem;
+  }
+
+  .score-line span {
+    min-height: 31px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fbfcfb;
+  }
+
+  .score-line strong {
+    display: block;
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+
+  .mobile-tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(14px);
+  }
+
+  .mobile-tab {
+    min-height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fbfcfb;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 900;
+  }
+
+  .mobile-tab.is-active {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: white;
+  }
+
+  .main-grid {
+    flex: 1 1 auto;
+    display: block;
+    min-height: 0;
+    overflow: hidden;
+    padding: 10px 10px calc(74px + env(safe-area-inset-bottom));
+  }
+
+  .main-grid > [data-view-panel] {
+    grid-column: auto;
+    grid-row: auto;
+    display: none;
+  }
+
+  .main-grid > [data-view-panel].is-active-view {
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .panel {
+    border-radius: 8px;
+    box-shadow: none;
+    padding: 12px;
+  }
+
+  .section-head {
+    margin-bottom: 10px;
+  }
+
+  .section-head h2 {
+    font-size: 1.05rem;
+  }
+
+  .mission-track {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 5px;
+    margin-bottom: 9px;
+  }
+
+  .mission-card {
+    min-height: 58px;
+    padding: 7px 4px;
+    text-align: center;
+    align-content: center;
+    gap: 1px;
+  }
+
+  .mission-card strong {
+    font-size: 1rem;
+  }
+
+  .mission-card span {
+    font-size: 0.68rem;
+    line-height: 1.2;
+  }
+
+  .mission-card span:last-child {
+    display: none;
+  }
+
+  .play-box {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .play-box p {
+    line-height: 1.45;
+    font-size: 0.9rem;
+  }
+
+  .public-ledger {
+    margin-top: 12px;
+    padding-top: 10px;
+  }
+
+  .ledger-head {
+    align-items: flex-start;
+    display: grid;
+    gap: 2px;
+  }
+
+  .ledger-row {
+    grid-template-columns: 1fr;
+    gap: 7px;
+    padding: 8px;
+  }
+
+  .ledger-team .player-chip {
+    min-height: 28px;
+    font-size: 0.82rem;
+  }
+
+  .team-grid,
+  .target-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .team-option,
+  .target-card {
+    min-height: 54px;
+    padding: 8px;
+  }
+
+  .identity-empty,
+  .identity-card {
+    min-height: 0;
+  }
+
+  .identity-card h3 {
+    font-size: 2rem;
+  }
+
+  .role-row {
+    padding: 10px;
+  }
+}
+
 @media (max-width: 560px) {
   .app-shell {
-    width: min(100vw - 18px, 720px);
-    padding-top: 12px;
+    width: 100%;
+    padding: 0;
   }
 
   .panel {
@@ -1035,8 +1406,6 @@ input:focus {
     justify-self: start;
   }
 
-  .mission-track,
-  .vote-buttons,
   .history-row {
     grid-template-columns: 1fr;
   }

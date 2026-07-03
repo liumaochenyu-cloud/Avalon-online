@@ -37,6 +37,8 @@ const els = {
   transferHost: document.querySelector("#transferHost"),
   dissolveRoom: document.querySelector("#dissolveRoom"),
   leaveRoom: document.querySelector("#leaveRoom"),
+  tabButtons: document.querySelectorAll("[data-view-tab]"),
+  viewPanels: document.querySelectorAll("[data-view-panel]"),
   stageTitle: document.querySelector("#stageTitle"),
   stageTip: document.querySelector("#stageTip"),
   playerCount: document.querySelector("#playerCount"),
@@ -60,6 +62,8 @@ let snapshot = null;
 let events = null;
 let selectedTeam = new Set();
 let selectionKey = "";
+let activeView = "play";
+let activeViewScope = "";
 
 const stageText = {
   lobby: {
@@ -147,6 +151,18 @@ function playerChips(ids) {
     .join("");
 }
 
+function missionTeamChips(mission) {
+  const members = mission.team?.length
+    ? mission.team
+    : (mission.teamIds || []).map((id) => {
+        const player = snapshot?.players.find((item) => item.id === id);
+        return player ? { playerId: id, name: player.name, avatar: player.avatar } : null;
+      }).filter(Boolean);
+  return members
+    .map((player) => `<span class="player-chip">${avatarHtml(player.avatar, "chip-avatar")}${escapeHtml(player.name || "离场玩家")}</span>`)
+    .join("");
+}
+
 function missionCards(mission) {
   return mission?.cards?.length ? mission.cards.join(" ") : "";
 }
@@ -197,6 +213,41 @@ function canTransferHost() {
 
 function on(element, eventName, handler) {
   if (element) element.addEventListener(eventName, handler);
+}
+
+function defaultRoomView() {
+  if (!snapshot) return "play";
+  if (snapshot.stage === "lobby") return snapshot.self?.isHost ? "setup" : "players";
+  return "play";
+}
+
+function roomViewScope() {
+  if (!snapshot) return "";
+  return `${snapshot.stage}:${snapshot.self?.isHost ? "host" : "player"}`;
+}
+
+function syncRoomView() {
+  if (!snapshot) return;
+  const scope = roomViewScope();
+  if (scope !== activeViewScope) {
+    activeView = defaultRoomView();
+    activeViewScope = scope;
+  }
+  const labels = {
+    play: snapshot.stage === "lobby" ? "开局" : snapshot.stage === "finished" ? "复盘" : "对局",
+    players: `玩家 ${snapshot.playerTotal}`,
+    identity: snapshot.self?.role ? "身份" : "身份",
+    setup: snapshot.self?.isHost ? "设置" : "配置",
+  };
+  els.tabButtons.forEach((button) => {
+    const isActive = button.dataset.viewTab === activeView;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+    button.textContent = labels[button.dataset.viewTab] || button.textContent;
+  });
+  els.viewPanels.forEach((panel) => {
+    panel.classList.toggle("is-active-view", panel.dataset.viewPanel === activeView);
+  });
 }
 
 async function connect() {
@@ -293,6 +344,7 @@ function renderRoom() {
   renderSetup();
   renderMissionTrack();
   renderPlay();
+  syncRoomView();
 }
 
 function playerName(id) {
@@ -477,6 +529,7 @@ function renderProposal() {
       ${lastMission}
       ${previous}
       <p>当前队长是 <strong>${escapeHtml(playerName(snapshot.leaderId))}</strong>。队伍确定后，你会在这里投赞成或反对。</p>
+      ${renderPublicMissionLedger()}
     `;
     return;
   }
@@ -504,6 +557,7 @@ function renderProposal() {
     <button class="primary" id="submitProposal" ${selectedTeam.size !== snapshot.currentTeamSize ? "disabled" : ""}>
       ${icon("flag")}提交队伍
     </button>
+    ${renderPublicMissionLedger()}
   `;
 }
 
@@ -522,6 +576,7 @@ function renderVoting() {
           </div>`
     }
     ${renderVoteStatus()}
+    ${renderPublicMissionLedger()}
   `;
 }
 
@@ -543,6 +598,7 @@ function renderMission() {
       <div class="inline-team"><span>本轮上队玩家：</span>${teamNames}</div>
       <p>你不在队伍中，等待他们提交任务牌。</p>
       ${renderMissionStatus()}
+      ${renderPublicMissionLedger()}
     `;
     return;
   }
@@ -553,6 +609,7 @@ function renderMission() {
       <div class="inline-team"><span>本轮上队玩家：</span>${teamNames}</div>
       <p>等待其他上队玩家提交。系统只会公布成功牌和失败牌数量，不会公布谁出了什么。</p>
       ${renderMissionStatus()}
+      ${renderPublicMissionLedger()}
     `;
     return;
   }
@@ -566,6 +623,7 @@ function renderMission() {
       <button class="fail-card" data-card="fail" ${snapshot.self.canPlayFail ? "" : "disabled"}>${icon("x")}失败</button>
     </div>
     ${renderMissionStatus()}
+    ${renderPublicMissionLedger()}
   `;
 }
 
@@ -589,6 +647,7 @@ function renderAssassination() {
       <h3>等待刺杀</h3>
       ${last}
       <p>好人已经完成三次任务。刺客正在自己的设备上选择梅林，选择完成后会公开身份和完整复盘。</p>
+      ${renderPublicMissionLedger()}
     `;
     return;
   }
@@ -610,6 +669,35 @@ function renderAssassination() {
         )
         .join("")}
     </div>
+    ${renderPublicMissionLedger()}
+  `;
+}
+
+function renderPublicMissionLedger() {
+  if (!snapshot.missionResults.length) return "";
+  return `
+    <section class="public-ledger">
+      <div class="ledger-head">
+        <strong>已完成任务</strong>
+        <span>只公开上队名单和公开牌</span>
+      </div>
+      <div class="ledger-list">
+        ${snapshot.missionResults
+          .map((mission) => {
+            const isSpecial = mission.threshold > 1;
+            return `
+              <article class="ledger-row ${mission.result}">
+                <div class="ledger-main">
+                  <strong>第 ${mission.roundIndex + 1} 轮</strong>
+                  <span>${mission.cards.join(" ")} · ${mission.result === "success" ? "成功" : "失败"}${isSpecial ? " · 特殊轮" : ""}</span>
+                </div>
+                <div class="ledger-team">${missionTeamChips(mission)}</div>
+              </article>
+            `;
+          })
+          .join("")}
+      </div>
+    </section>
   `;
 }
 
@@ -633,7 +721,7 @@ function renderMissionHistory() {
                   })
                   .join("")}
               </div>`
-            : `<div class="inline-team">${playerChips(mission.teamIds)}</div>`;
+            : `<div class="inline-team">${missionTeamChips(mission)}</div>`;
           return `
             <article class="history-row ${mission.result}">
               <div>
@@ -807,6 +895,7 @@ on(els.dealButton, "click", async () => {
 });
 
 document.addEventListener("click", async (event) => {
+  const viewTabButton = event.target.closest("[data-view-tab]");
   const avatarButton = event.target.closest("[data-avatar]");
   const roleButton = event.target.closest("[data-role]");
   const presetButton = event.target.closest("[data-preset]");
@@ -819,6 +908,12 @@ document.addEventListener("click", async (event) => {
   const resetButton = event.target.closest("#resetRoom");
 
   try {
+    if (viewTabButton) {
+      activeView = viewTabButton.dataset.viewTab;
+      activeViewScope = roomViewScope();
+      syncRoomView();
+      return;
+    }
     if (avatarButton) {
       const picker = avatarButton.closest("[data-avatar-picker]");
       const input = picker ? document.querySelector(`#${picker.dataset.avatarPicker}`) : null;
